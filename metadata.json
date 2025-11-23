@@ -1,0 +1,7 @@
+{
+  "name": "Ai助教",
+  "description": "一个利用 AI 辅助教师根据自然语言观察记录，提供结构化分析与反馈的智能工具。",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
