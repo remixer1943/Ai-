@@ -17,7 +17,11 @@ const JSON_CODE_BLOCK_REGEX = /```(?:json)?\s*([\s\S]*?)```/i;
 
 const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 
-const sliceJsonSegment = (text: string, openChar: '{' | '[', closeChar: '}' | ']'): string | null => {
+const sliceJsonSegment = (
+  text: string,
+  openChar: '{' | '[',
+  closeChar: '}' | ']'
+): string | null => {
   const start = text.indexOf(openChar);
   const end = text.lastIndexOf(closeChar);
   if (start === -1 || end === -1 || end <= start) {
@@ -76,15 +80,16 @@ const parseJsonResponse = <T>(content: string): T => {
 
 const normalizePrediction = (raw: any, fallbackLabel = '待确认'): Prediction => {
   const value = typeof raw?.value === 'string' ? raw.value.trim() : '';
-  const rawConfidence = typeof raw?.confidence === 'number'
-    ? raw.confidence
-    : typeof raw?.confidence === 'string'
-      ? parseFloat(raw.confidence)
-      : NaN;
+  const rawConfidence =
+    typeof raw?.confidence === 'number'
+      ? raw.confidence
+      : typeof raw?.confidence === 'string'
+        ? parseFloat(raw.confidence)
+        : NaN;
 
   return {
     value: value || fallbackLabel,
-    confidence: Number.isFinite(rawConfidence) ? clamp(rawConfidence) : 0
+    confidence: Number.isFinite(rawConfidence) ? clamp(rawConfidence) : 0,
   };
 };
 
@@ -93,9 +98,11 @@ const derivePredictionHints = (targets?: MatchedTarget[]) => {
     return null;
   }
   const primary = targets[0];
-  const sourceSegments = primary.source?.split('/')
-    .map(segment => segment.trim())
-    .filter(Boolean) || [];
+  const sourceSegments =
+    primary.source
+      ?.split('/')
+      .map((segment) => segment.trim())
+      .filter(Boolean) || [];
 
   const domain = sourceSegments[0];
   const lastSegment = sourceSegments[sourceSegments.length - 1];
@@ -103,9 +110,10 @@ const derivePredictionHints = (targets?: MatchedTarget[]) => {
 
   return {
     domain,
-    domainConfidence: typeof primary.confidence === 'number' ? clamp(primary.confidence) : undefined,
+    domainConfidence:
+      typeof primary.confidence === 'number' ? clamp(primary.confidence) : undefined,
     age: looksLikeAge ? lastSegment : undefined,
-    ageConfidence: typeof primary.confidence === 'number' ? clamp(primary.confidence) : undefined
+    ageConfidence: typeof primary.confidence === 'number' ? clamp(primary.confidence) : undefined,
   };
 };
 
@@ -119,9 +127,9 @@ const callSiliconFlowAPI = async (
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
+      Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
@@ -133,7 +141,7 @@ const callSiliconFlowAPI = async (
       } else if (typeof errBody === 'string') {
         errorMessage = errBody;
       }
-    } catch (err) {
+    } catch {
       // ignore parsing error
     }
     throw new Error(`硅基流动 API 调用失败: ${errorMessage}`);
@@ -144,41 +152,53 @@ const callSiliconFlowAPI = async (
 
 const retrieveKnowledge = (query: string, topK: number = 5): string => {
   if (!query || !query.trim()) return '';
-  const keywords = query.toLowerCase().replace(/[^\w\s\u4e00-\u9fa5]/g, '').split(/\s+/).filter(k => k.length > 1);
+  const keywords = query
+    .toLowerCase()
+    .replace(/[^\w\s\u4e00-\u9fa5]/g, '')
+    .split(/\s+/)
+    .filter((k) => k.length > 1);
   if (keywords.length === 0) return '';
 
-  const scoredChunks = knowledgeBase.chunks.map(chunk => {
+  const scoredChunks = knowledgeBase.chunks.map((chunk) => {
     const text = chunk.text.toLowerCase();
     let score = 0;
-    keywords.forEach(keyword => {
+    keywords.forEach((keyword) => {
       if (text.includes(keyword)) score += 1;
     });
     return { chunk, score };
   });
 
   const topChunks = scoredChunks
-    .filter(item => item.score > 0)
+    .filter((item) => item.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);
 
   if (topChunks.length === 0) return '';
 
-  return topChunks.map((item, index) => `
+  return topChunks
+    .map(
+      (item, index) => `
 [参考资料 ${index + 1}] (来源: ${item.chunk.source})
 ${item.chunk.text}
-`).join('\n');
+`
+    )
+    .join('\n');
 };
 
 const formatLogsForPrompt = (logs: CalibrationLog[]): string => {
   if (!logs || logs.length === 0) return '';
-  const highQualityLogs = logs.filter(log => log.calibratedEvidence.length > 0).slice(0, 2);
+  const highQualityLogs = logs.filter((log) => log.calibratedEvidence.length > 0).slice(0, 2);
   if (highQualityLogs.length === 0) return '';
 
-  const examples = highQualityLogs.map((log, index) => `
+  const examples = highQualityLogs
+    .map(
+      (log, index) => `
 ### 专家校准范例 #${index + 1}
 - **原始记录**: "${log.originalText}"
 - **专家校准后的关键证据**: ${JSON.stringify(log.calibratedEvidence)}
-  `).join('');
+  `
+    )
+    .join('');
 
   return `
 ---
@@ -189,16 +209,33 @@ ${examples}
 };
 
 const baseRules = `**通用核心规则**
-1.  **知识库优先**：如果提供了参考资料（'Reference Knowledge'），你必须优先依据该文档内容进行分析。此时，所有匹配目标的'source'字段必须为“来自参考资料”。如果未提供，则依据你内置的《指南》知识。
+1.  **知识库优先**：如果提供了参考资料（'Reference Knowledge'），你必须优先依据该文档内容进行分析。此时，所有匹配目标的'source'字段必须为"来自参考资料"。如果未提供，则依据你内置的《指南》知识。
 2.  **循证分析**：'evidence'字段必须是直接引用或高度概括观察记录中的原话，这是证明你的匹配是循证的关键。如果同时提供了图片，你的分析和证据需要结合图片内容。
-3.  **核心预测**：判断观察记录最能体现的核心发展领域（'domainPrediction'），并给出置信度（0到1之间）。
+3.  **【强制】核心预测**：判断观察记录最能体现的核心发展领域（'domainPrediction'），并给出置信度（0到1之间）。**重要约束**：'domainPrediction.value' 字段**必须且只能**是以下五大领域之一：**健康**、**语言**、**社会**、**科学**、**艺术**。严禁使用其他值（如"指南"、"综合"等）。
 4.  **【强制】多维分析**: 一段复杂的观察记录可能同时反映多个领域的目标。如果适用，你应为同一段证据匹配多个来自不同领域或方面的目标。
 5.  **匹配发展目标**：找出所有相关的具体发展目标（'matchedTargets'），按置信度从高到低排序，最多 5 个。
-6.  **提供观察建议**：为每个匹配目标提供 2 条可操作的“即时观察项”。
+6.  **提供观察建议**：为每个匹配目标提供 2 条可操作的"即时观察项"。
 7.  **提供教育建议**：为每个匹配目标提供来自《指南》或参考资料的 1-3 条教育建议。
 8.  **提供解析**：每个目标必须提供 'reasoning' 字段，解释证据与目标的逻辑联系。
 9.  **来源路径格式**: 'source' 字段必须严格遵循 '领域 / 方面 / 目标X 标题 / 年龄段' 格式。
-10. **JSON输出**：你的回答必须是合法 JSON。`;
+10. **【新增】整体评价 (holistic_evaluation)**：
+    a. **结构**：分为3-4段，每段聚焦一个维度（如认知特征、学习品质、社会性发展）
+    b. **证据密度**：平均每40字必须对应一个具体行为细节
+    c. **理论框架**：至少使用一个发展心理学理论来解释行为意义
+    d. **语言风格**：专业但有温度，像资深教研员在和家长交流
+    e. **禁忌**：严禁使用"宝宝""真棒""很聪明"等泛泛表述
+11. **JSON输出**：你的回答必须是合法 JSON。`;
+
+const goldenExample = `
+**整体评价黄金范例**：
+观察记录："小明搭积木时，先尝试用圆柱体做底座，发现不稳后，换成了立方体..."
+
+✅ 高质量评价示例：
+"  从小明的搭建行为可以观察到明显的'试错-调整'策略循环（Trial-and-Error，皮亚杰），这是4-5岁幼儿具身认知发展的典型表现。他在发现圆柱体底座不稳后，并未求助成人，而是自主切换方案，这种策略灵活性（cognitive flexibility）体现了执行功能的萌芽。值得关注的是，他在成功后回顾了失败方案（'圆的会滚'），显示出初步的元认知意识..."
+
+❌ 低质量评价（需避免）：
+"小明在搭积木时表现得很聪明，遇到困难也不放弃，说明他的动手能力很强..."
+`;
 
 const buildSystemInstruction = (
   ageGroup: AgeGroup,
@@ -207,32 +244,40 @@ const buildSystemInstruction = (
 ): string => {
   if (ageGroup === AgeGroup.AUTO_DETECT) {
     if (keyEvidence && keyEvidence.length > 0) {
-      return `你是一位顶尖的儿童早期教育专家，正在进行一次高度聚焦的分析。一位专家已经为你提取了“黄金证据”列表。
+      return `你是一位顶尖的儿童早期教育专家，正在进行一次高度聚焦的分析。一位专家已经为你提取了"黄金证据"列表。
 **核心任务分两步**：
-1.  **第一步：基于黄金证据判断年龄段**。仅根据“黄金证据”列表判断孩子的年龄段（'3-4岁', '4-5岁', '5-6岁'），并写入'agePrediction'。
+1.  **第一步：基于黄金证据判断年龄段**。仅根据"黄金证据"列表判断孩子的年龄段（'3-4岁', '4-5岁', '5-6岁'），并写入'agePrediction'。
 2.  **第二步：仅使用黄金证据完成分析**。所有目标匹配和'evidence'字段都必须来自黄金证据列表。
-${baseRules}`;
+${baseRules}
+
+${goldenExample}`;
     }
     return `你是一位顶尖的儿童早期教育专家。你的任务是分析教师提供的幼儿观察记录，并以结构化 JSON 返回专业评估。
 **核心任务分两步**：
 1.  **智能判断年龄段**：根据观察记录判断最符合的年龄段填入 'agePrediction'。
 2.  **基于判断完成分析**：'matchedTargets' 中所有目标的年龄段必须与 'agePrediction' 一致。
-${baseRules}`;
+${baseRules}
+
+${goldenExample}`;
   }
 
   if (keyEvidence && keyEvidence.length > 0) {
-    return `你是一位顶尖的儿童早期教育专家。一位专家用户已经为你提取了“黄金证据”。
+    return `你是一位顶尖的儿童早期教育专家。一位专家用户已经为你提取了"黄金证据"。
 **最高优先级指令**：
-1.  **唯一依据**：所有分析必须基于“黄金证据”。
+1.  **唯一依据**：所有分析必须基于"黄金证据"。
 2.  **禁止自由发挥**：严禁从原始文本中寻找黄金证据之外的信息。
 3.  **年龄段框架**：所有目标必须严格在用户指定的年龄段内。
-${baseRules}`;
+${baseRules}
+
+${goldenExample}`;
   }
 
   const fewShotExamples = formatLogsForPrompt(calibrationLogs || []);
   return `${fewShotExamples}你是一位顶尖的儿童早期教育专家，对《3-6岁儿童学习与发展指南》了如指掌。
 **【强制】年龄段框架**：所有分析必须严格在用户指定的年龄段内。即使你判断文本描述的儿童行为属于别的年龄段，也必须遵守用户指定。
-${baseRules}`;
+${baseRules}
+
+${goldenExample}`;
 };
 
 const buildUserPrompt = (
@@ -247,9 +292,9 @@ const buildUserPrompt = (
 - **观察记录 (inputText)**: "${observationText}"
 - **幼儿年龄段 (ageGroup)**: "${ageGroup}"
 ${combinedKnowledge ? `- **参考资料 (Reference Knowledge)**: """${combinedKnowledge}"""` : ''}
-${(keyEvidence && keyEvidence.length > 0) ? `- **专家确认的黄金证据 (Golden Evidence)**: ${JSON.stringify(keyEvidence)}` : ''}
+${keyEvidence && keyEvidence.length > 0 ? `- **专家确认的黄金证据 (Golden Evidence)**: ${JSON.stringify(keyEvidence)}` : ''}
 
-输出必须是一个 JSON 对象，包含字段: queryId (以 "qry-" 开头), domainPrediction, agePrediction, matchedTargets (1-5 个，字段包括 id/title/source/evidence/reasoning/confidence/suggested_observations/educationalSuggestions)。`;
+输出必须是一个 JSON 对象，包含字段: queryId (以 "qry-" 开头), domainPrediction, agePrediction, holistic_evaluation (整体发展评价，3-4段专业分析), matchedTargets (1-5 个，字段包括 id/title/source/evidence/reasoning/confidence/suggested_observations/educationalSuggestions)。`;
 };
 
 export const extractEvidence = async (
@@ -270,8 +315,8 @@ export const extractEvidence = async (
     temperature: 0.1,
     messages: [
       { role: 'system', content: systemInstruction },
-      { role: 'user', content: userContent }
-    ]
+      { role: 'user', content: userContent },
+    ],
   };
 
   const response = await callSiliconFlowAPI(apiKey, payload, baseUrl);
@@ -290,7 +335,7 @@ export const extractEvidence = async (
     }
     throw new Error('响应不是 JSON 数组。');
   } catch (error) {
-    console.error('Failed to parse SiliconFlow evidence response:', content);
+    console.error('Failed to parse SiliconFlow evidence response:', content, error);
     throw new Error('解析硅基流动返回的证据失败，请稍后再试。');
   }
 };
@@ -302,9 +347,17 @@ export const queryGuide = async (
   baseUrl?: string,
   calibrationLogs?: CalibrationLog[]
 ): Promise<QueryResult> => {
-  const { observationText, ageGroup, knowledgeBase: customKnowledgeBase, keyEvidence, images } = data;
+  const {
+    observationText,
+    ageGroup,
+    knowledgeBase: customKnowledgeBase,
+    keyEvidence,
+    images,
+  } = data;
   const retrievedKnowledge = retrieveKnowledge(observationText);
-  const combinedKnowledgeBase = [customKnowledgeBase, retrievedKnowledge].filter(Boolean).join('\n\n');
+  const combinedKnowledgeBase = [customKnowledgeBase, retrievedKnowledge]
+    .filter(Boolean)
+    .join('\n\n');
   const systemInstruction = buildSystemInstruction(ageGroup, keyEvidence, calibrationLogs);
   const userPrompt = buildUserPrompt(observationText, ageGroup, combinedKnowledgeBase, keyEvidence);
 
@@ -314,8 +367,8 @@ export const queryGuide = async (
     messages: [
       { role: 'system', content: systemInstruction },
       { role: 'user', content: userPrompt },
-      ...(images?.length ? [{ role: 'user', content: '（附带图片信息，需结合分析。）' }] : [])
-    ]
+      ...(images?.length ? [{ role: 'user', content: '（附带图片信息，需结合分析。）' }] : []),
+    ],
   };
 
   const response = await callSiliconFlowAPI(apiKey, payload, baseUrl);
@@ -332,7 +385,7 @@ export const queryGuide = async (
       domainPrediction: normalizePrediction(parsed.domainPrediction),
       agePrediction: normalizePrediction(parsed.agePrediction, fallbackAgeLabel),
       inputText: observationText,
-      selectedAgeGroup: ageGroup as AgeGroup
+      selectedAgeGroup: ageGroup as AgeGroup,
     };
 
     const derivedHints = derivePredictionHints(parsed.matchedTargets);
@@ -340,23 +393,30 @@ export const queryGuide = async (
       if (!finalResult.domainPrediction.value || finalResult.domainPrediction.value === '待确认') {
         finalResult.domainPrediction.value = derivedHints.domain;
       }
-      if ((finalResult.domainPrediction.confidence ?? 0) <= 0 && derivedHints.domainConfidence !== undefined) {
+      if (
+        (finalResult.domainPrediction.confidence ?? 0) <= 0 &&
+        derivedHints.domainConfidence !== undefined
+      ) {
         finalResult.domainPrediction.confidence = derivedHints.domainConfidence;
       }
     }
 
-    const shouldUseDerivedAge = ageGroup === AgeGroup.AUTO_DETECT || finalResult.agePrediction.value === '待确认';
+    const shouldUseDerivedAge =
+      ageGroup === AgeGroup.AUTO_DETECT || finalResult.agePrediction.value === '待确认';
     if (shouldUseDerivedAge && derivedHints?.age) {
       if (!finalResult.agePrediction.value || finalResult.agePrediction.value === '待确认') {
         finalResult.agePrediction.value = derivedHints.age;
       }
-      if ((finalResult.agePrediction.confidence ?? 0) <= 0 && derivedHints.ageConfidence !== undefined) {
+      if (
+        (finalResult.agePrediction.confidence ?? 0) <= 0 &&
+        derivedHints.ageConfidence !== undefined
+      ) {
         finalResult.agePrediction.confidence = derivedHints.ageConfidence;
       }
     }
     return finalResult;
   } catch (error) {
-    console.error('Failed to parse SiliconFlow query response:', content);
+    console.error('Failed to parse SiliconFlow query response:', content, error);
     throw new Error('解析硅基流动分析结果失败，请检查模型配置。');
   }
 };
@@ -380,8 +440,8 @@ export const getGrowthInsightAnalysis = async (
     temperature: 0.3,
     messages: [
       { role: 'system', content: systemInstruction },
-      { role: 'user', content: userPrompt }
-    ]
+      { role: 'user', content: userPrompt },
+    ],
   };
 
   const response = await callSiliconFlowAPI(apiKey, payload, baseUrl);
@@ -409,7 +469,7 @@ export async function* generateLearningStoryStream(
 
 观察记录："${observationText}"
 主要领域：${analysisResult.domainPrediction.value}
-核心发现：${analysisResult.matchedTargets.map(t => t.title).join('; ')}
+核心发现：${analysisResult.matchedTargets.map((t) => t.title).join('; ')}
 `;
 
   const payload = {
@@ -417,8 +477,8 @@ export async function* generateLearningStoryStream(
     temperature: 0.8,
     messages: [
       { role: 'system', content: systemInstruction },
-      { role: 'user', content: userPrompt }
-    ]
+      { role: 'user', content: userPrompt },
+    ],
   };
 
   const response = await callSiliconFlowAPI(apiKey, payload, baseUrl);

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Prediction } from '../types';
 
@@ -8,9 +7,10 @@ interface PredictionBadgeProps {
 }
 
 export const PredictionBadge: React.FC<PredictionBadgeProps> = ({ label, prediction }) => {
-  const value = typeof prediction.value === 'string' && prediction.value.trim()
-    ? prediction.value.trim()
-    : '待确认';
+  const value =
+    typeof prediction.value === 'string' && prediction.value.trim()
+      ? prediction.value.trim()
+      : '待确认';
   const normalizedConfidence =
     typeof prediction.confidence === 'number' && Number.isFinite(prediction.confidence)
       ? prediction.confidence

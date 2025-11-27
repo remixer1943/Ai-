@@ -1,4 +1,3 @@
-
 export enum AgeGroup {
   AUTO_DETECT = '由AI自动判断',
   THREE_TO_FOUR = '3-4岁',
@@ -33,6 +32,7 @@ export interface QueryResult {
   selectedAgeGroup: AgeGroup;
   domainPrediction: Prediction;
   agePrediction: Prediction;
+  holistic_evaluation?: string; // New field for overall assessment
   matchedTargets: MatchedTarget[];
 }
 
@@ -45,6 +45,20 @@ export interface FeedbackPayload {
   queryId: string;
   targetId: string;
   feedbackType: FeedbackType;
+  originalText: string;
+  aiEvidence: string;
+  matchedTarget: string; // JSON string of MatchedTarget
+}
+
+export interface FeedbackLog {
+  id?: number;
+  queryId: string;
+  targetId: string;
+  originalText: string;
+  aiEvidence: string;
+  matchedTarget: string; // JSON string of MatchedTarget
+  feedbackType: FeedbackType;
+  timestamp: string;
 }
 
 export interface CalibrationLog {
@@ -53,11 +67,12 @@ export interface CalibrationLog {
   originalText: string;
   aiInitialEvidence: string[];
   calibratedEvidence: string[];
-  images?: { mimeType: string; data: string; }[];
-  video?: { mimeType: string; data: string; };
+  images?: { mimeType: string; data: string }[];
+  video?: { mimeType: string; data: string };
   // New fields for advanced metrics
   domain?: string;
   confidence?: number;
+  calibrationPrinciple?: string; // The principle learned from this calibration
 }
 
 // --- Gamification & Stats Types ---
